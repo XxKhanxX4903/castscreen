@@ -6,7 +6,7 @@ window.CASTSCREEN = {
   name: "",
 
   // A note under the date, e.g. "Dinner at 7". Leave empty to hide it.
-  message: "",
+  message: "hello from my phone",
 
   // How often the TV looks for changes, in minutes.
   checkMinutes: 2,
