@@ -42,6 +42,10 @@
   #clock { position: absolute; left: 104px; top: 112px; font-size: 176px; font-weight: 200;
            letter-spacing: -3px; line-height: 1; font-variant-numeric: tabular-nums; }
   #date { position: absolute; left: 112px; top: 306px; font-size: 36px; font-weight: 300; color: var(--muted); }
+  #message { position: absolute; left: 112px; top: 368px; max-width: 1100px; font-size: 34px; font-weight: 400;
+             padding: 10px 26px; margin-left: -4px; border-radius: 999px; background: var(--pill);
+             border: 1px solid var(--pill-edge); display: none; }
+  #message.on { display: inline-block; }
 
   /* Top right: frosted weather pill (translucent fill, no blur: Chromecasts are slow) */
   #weather { position: absolute; right: 112px; top: 88px; display: none; align-items: center; gap: 18px;
@@ -91,6 +95,7 @@
     <div id="greeting"></div>
     <div id="clock"></div>
     <div id="date"></div>
+    <div id="message"></div>
     <div id="weather">
       <svg id="wx-icon" viewBox="0 0 48 48" fill="none" stroke="#f5f5f7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></svg>
       <div id="wx-temp"></div>
@@ -100,7 +105,10 @@
     <div id="dock"><div id="lens"></div></div>
   </div>
 </div>
-<script src="config.js"></script>
+<script>
+  // Load config.js past any cache, so an edit on GitHub shows up on the next reload.
+  document.write('<script src="config.js?v=' + Date.now() + '"><\/script>');
+</script>
 <script>
 (function () {
   var C = window.CASTSCREEN || {};
@@ -237,6 +245,23 @@
     }).catch(function () {});
   }
   if (C.showWeather !== false && C.latitude != null) { weather(); setInterval(weather, 30 * 60 * 1000); }
+
+  // Message line under the date
+  if (C.message) { $("message").textContent = C.message; $("message").classList.add("on"); }
+
+  // Remote control from a phone: when config.js or this page changes on GitHub, reload.
+  var seen = {};
+  function checkForChanges() {
+    ["config.js", "index.html"].forEach(function (f) {
+      fetch(f + "?v=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) {
+        if (t === null) return;
+        if (seen[f] === undefined) { seen[f] = t; return; }
+        if (t !== seen[f]) location.reload();
+      }).catch(function () {});
+    });
+  }
+  checkForChanges();
+  setInterval(checkForChanges, Math.max(0.1, C.checkMinutes || 2) * 60 * 1000);
 
   // Nudge everything a few pixels every 4 minutes so nothing sits in one place for hours.
   var shifts = [[0, 0], [6, 4], [-5, 6], [4, -5], [-6, -3]], s = 0;

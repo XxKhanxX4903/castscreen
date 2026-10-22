@@ -1,8 +1,15 @@
-// Edit this file to change what the TV shows, then upload it to GitHub again.
-// The Chromecast picks up the change the next time you start the screen.
+// Edit this file on GitHub (from your phone too) to change what the TV shows.
+// The TV checks for changes every few minutes and reloads by itself.
+// Keep the quotes and commas as they are: a missing one stops the page loading.
 window.CASTSCREEN = {
   // Shown as "Good evening, Name". Leave empty for just "Good evening".
   name: "",
+
+  // A note under the date, e.g. "Dinner at 7". Leave empty to hide it.
+  message: "",
+
+  // How often the TV looks for changes, in minutes.
+  checkMinutes: 2,
 
   // Time zone for the clock and greeting.
   timezone: "Europe/London",
