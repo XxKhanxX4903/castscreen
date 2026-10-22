@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cast Screen</title>
+<style>
+  @font-face { font-family: "Outfit"; src: url("fonts/outfit.ttf") format("truetype"); font-weight: 100 900; }
+
+  :root {
+    --text: #f5f5f7;
+    --muted: rgba(245, 245, 247, 0.72);
+    --band: rgba(255, 255, 255, 0.075);
+    --band-edge: rgba(255, 255, 255, 0.09);
+    --pill: rgba(28, 28, 32, 0.55);
+    --pill-edge: rgba(255, 255, 255, 0.16);
+    --spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+  }
+
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  body { font-family: "Outfit", system-ui, sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  /* Everything is laid out on a 1920x1080 stage that is scaled to fit the screen. */
+  #stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px;
+           transform-origin: 0 0; overflow: hidden; background: #000; }
+
+  .bg { position: absolute; inset: 0; background: #000 center / cover no-repeat;
+        opacity: 0; transition: opacity 2.5s ease; }
+  .bg.on { opacity: 1; }
+  #shade { position: absolute; inset: 0;
+           background:
+             radial-gradient(ellipse 1100px 620px at 0 0, rgba(0,0,0,0.62), rgba(0,0,0,0) 70%),
+             linear-gradient(to top, rgba(0,0,0,0.88) 0, rgba(0,0,0,0.35) 42%, rgba(0,0,0,0.08) 70%); }
+
+  #glow { position: absolute; left: -200px; right: -200px; bottom: -380px; height: 820px;
+          opacity: 0.55; transition: background 1.2s ease; pointer-events: none; }
+
+  #safe { position: absolute; inset: 0; transition: transform 3s ease; }
+
+  /* Top left: greeting, clock, date */
+  #greeting { position: absolute; left: 112px; top: 78px; font-size: 36px; font-weight: 300; color: var(--muted); }
+  #clock { position: absolute; left: 104px; top: 112px; font-size: 176px; font-weight: 200;
+           letter-spacing: -3px; line-height: 1; font-variant-numeric: tabular-nums; }
+  #date { position: absolute; left: 112px; top: 306px; font-size: 36px; font-weight: 300; color: var(--muted); }
+
+  /* Top right: frosted weather pill (translucent fill, no blur: Chromecasts are slow) */
+  #weather { position: absolute; right: 112px; top: 88px; display: none; align-items: center; gap: 18px;
+             padding: 16px 30px 16px 22px; border-radius: 999px; background: var(--pill);
+             border: 1px solid var(--pill-edge); box-shadow: 0 10px 40px rgba(0,0,0,0.35); }
+  #weather.on { display: flex; }
+  #wx-icon { width: 52px; height: 52px; }
+  #wx-temp { font-size: 44px; font-weight: 300; }
+  #wx-text { display: flex; flex-direction: column; line-height: 1.15; }
+  #wx-place { font-size: 24px; font-weight: 400; }
+  #wx-range { font-size: 22px; font-weight: 300; color: var(--muted); }
+
+  /* Focused dock app's name above the dock */
+  #title { position: absolute; left: 112px; bottom: 318px; font-size: 68px; font-weight: 300;
+           letter-spacing: -0.5px; transition: opacity 0.35s ease, text-shadow 1.2s ease; }
+  #title.fade { opacity: 0; }
+
+  /* Dock */
+  #dock { position: absolute; left: 88px; right: 88px; bottom: 58px; height: 236px; border-radius: 40px;
+          background: var(--band); border: 1px solid var(--band-edge); }
+  .tile { position: absolute; top: 30px; border-radius: 20px; overflow: hidden;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 34px; font-weight: 500; letter-spacing: 0.2px; text-shadow: 0 2px 10px rgba(0,0,0,0.35);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.45); transition: transform 0.55s var(--spring); }
+  .tile::after { content: ""; position: absolute; inset: 0;
+                 background: linear-gradient(160deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 45%); }
+  .tile.focus { transform: scale(1.09); z-index: 2; }
+  .label { position: absolute; top: 192px; text-align: center; font-size: 25px; font-weight: 400;
+           color: var(--muted); opacity: 0; transition: opacity 0.35s ease; }
+  .label.focus { opacity: 1; }
+
+  /* One glass highlight that springs from tile to tile */
+  #lens { position: absolute; top: 30px; border-radius: 22px; z-index: 3; pointer-events: none;
+          background: linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.12));
+          border: 1.5px solid rgba(255,255,255,0.55);
+          box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 18px 50px rgba(0,0,0,0.5);
+          transition: transform 0.65s var(--spring); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bg" id="bg0"></div>
+  <div class="bg" id="bg1"></div>
+  <div id="shade"></div>
+  <div id="glow"></div>
+  <div id="safe">
+    <div id="greeting"></div>
+    <div id="clock"></div>
+    <div id="date"></div>
+    <div id="weather">
+      <svg id="wx-icon" viewBox="0 0 48 48" fill="none" stroke="#f5f5f7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></svg>
+      <div id="wx-temp"></div>
+      <div id="wx-text"><div id="wx-place"></div><div id="wx-range"></div></div>
+    </div>
+    <div id="title"></div>
+    <div id="dock"><div id="lens"></div></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script>
+(function () {
+  var C = window.CASTSCREEN || {};
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Scale the 1920x1080 stage to the screen (720p, 1080p and 4K Chromecasts).
+  function fit() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    $("stage").style.transform = "scale(" + s + ") translate(-50%, -50%)";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+
+  // Clock, date and greeting
+  var tz = C.timezone || "Europe/London";
+  var timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: C.clock24 === false, timeZone: tz });
+  var dateFmt = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: tz });
+  var hourFmt = new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: tz });
+  function tick() {
+    var now = new Date();
+    var h = parseInt(hourFmt.format(now), 10) % 24;
+    var part = h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : h < 22 ? "Good evening" : "Good night";
+    $("greeting").textContent = C.name ? part + ", " + C.name : part;
+    $("clock").textContent = timeFmt.format(now).replace(/\s?[ap]m$/i, "");
+    $("date").textContent = dateFmt.format(now).replace(",", "");
+    setTimeout(tick, 1000 - (now.getTime() % 1000) + 20);
+  }
+  tick();
+
+  // Slideshow: two layers cross-fade; the next photo is loaded before it is shown.
+  var photos = (C.photos || []).slice();
+  var order = [], at = -1, layer = 0;
+  function nextPhoto() {
+    if (!photos.length) return;
+    if (at + 1 >= order.length) {
+      var last = order[order.length - 1];
+      order = photos.slice();
+      if (C.shuffle !== false) {
+        for (var i = order.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = order[i]; order[i] = order[j]; order[j] = t; }
+        if (order.length > 1 && order[0] === last) { order.push(order.shift()); }
+      }
+      at = -1;
+    }
+    var src = "photos/" + order[++at];
+    var img = new Image();
+    img.onload = function () {
+      layer = 1 - layer;
+      var show = $("bg" + layer), hide = $("bg" + (1 - layer));
+      show.style.backgroundImage = "url('" + src + "')";
+      show.classList.add("on");
+      hide.classList.remove("on");
+    };
+    img.onerror = function () { setTimeout(nextPhoto, 2000); };
+    img.src = src;
+  }
+  nextPhoto();
+  setInterval(nextPhoto, Math.max(10, C.photoSeconds || 60) * 1000);
+
+  // Dock: tiles in banner colours, one glass lens that springs between them.
+  var apps = (C.dock || []).slice(0, 7);
+  var dock = $("dock"), lens = $("lens");
+  var pad = 34, gap = 30, inner = 1744 - pad * 2;
+  var tw = Math.floor((inner - gap * (apps.length - 1)) / Math.max(1, apps.length));
+  var th = Math.min(148, Math.round(tw * 9 / 16));
+  var tiles = [], labels = [], focus = 0;
+  apps.forEach(function (a, i) {
+    var x = pad + i * (tw + gap);
+    var t = document.createElement("div");
+    t.className = "tile";
+    t.style.cssText = "left:" + x + "px;width:" + tw + "px;height:" + th + "px;background:linear-gradient(135deg," + a.colors[0] + "," + a.colors[1] + ")";
+    t.textContent = a.name;
+    if (tw < 220) t.style.fontSize = "28px";
+    var l = document.createElement("div");
+    l.className = "label";
+    l.style.cssText = "left:" + x + "px;width:" + tw + "px;top:" + (30 + th + 20) + "px";
+    l.textContent = a.name;
+    dock.appendChild(t); dock.appendChild(l);
+    tiles.push(t); labels.push(l);
+  });
+  var grow = 1.09;
+  lens.style.width = Math.round(tw * grow) + "px";
+  lens.style.height = Math.round(th * grow) + "px";
+  lens.style.top = Math.round(30 - th * (grow - 1) / 2) + "px";
+
+  function hexToRgb(h) { var n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function setFocus(i) {
+    if (!apps.length) return;
+    tiles[focus].classList.remove("focus"); labels[focus].classList.remove("focus");
+    focus = i;
+    tiles[i].classList.add("focus"); labels[i].classList.add("focus");
+    lens.style.transform = "translateX(" + Math.round(pad + i * (tw + gap) - tw * (grow - 1) / 2) + "px)";
+    var c = hexToRgb(apps[i].colors[0]).join(",");
+    $("glow").style.background = "radial-gradient(ellipse 50% 60% at " + Math.round((pad + i * (tw + gap) + tw / 2 + 288) / 2320 * 100) + "% 55%, rgba(" + c + ",0.75), rgba(" + c + ",0) 70%)";
+    var title = $("title");
+    title.classList.add("fade");
+    setTimeout(function () {
+      title.textContent = apps[i].name;
+      title.style.textShadow = "0 0 40px rgba(" + c + ",0.85), 0 0 90px rgba(" + c + ",0.45)";
+      title.classList.remove("fade");
+    }, 350);
+  }
+  setFocus(0);
+  setInterval(function () { setFocus((focus + 1) % Math.max(1, apps.length)); }, Math.max(3, C.dockSeconds || 7) * 1000);
+
+  // Weather from Open-Meteo, every 30 minutes. A failed fetch keeps the last reading.
+  var ICONS = {
+    sun: '<circle cx="24" cy="24" r="8"/><path d="M24 6v4M24 38v4M6 24h4M38 24h4M11.3 11.3l2.8 2.8M33.9 33.9l2.8 2.8M11.3 36.7l2.8-2.8M33.9 14.1l2.8-2.8"/>',
+    moon: '<path d="M33 30a13 13 0 0 1-15-19 13 13 0 1 0 15 19z"/>',
+    partly: '<path d="M17 13a7 7 0 0 1 11 3"/><path d="M14 5v3M5 14h3M7.6 7.6l2.1 2.1"/><path d="M15 38h18a7 7 0 0 0 0-14 10 10 0 0 0-19 3 5.5 5.5 0 0 0 1 11z"/>',
+    cloud: '<path d="M14 36h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 6.5 6.5 0 0 0 1 13z"/>',
+    fog: '<path d="M8 18h32M6 25h36M10 32h28M14 39h20"/>',
+    rain: '<path d="M14 30h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 6.5 6.5 0 0 0 1 13z"/><path d="M17 35l-2 5M25 35l-2 5M33 35l-2 5"/>',
+    snow: '<path d="M14 30h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 6.5 6.5 0 0 0 1 13z"/><path d="M17 37h.01M24 40h.01M31 37h.01"/>',
+    storm: '<path d="M14 28h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 6.5 6.5 0 0 0 1 13z"/><path d="M25 31l-4 7h6l-4 7"/>'
+  };
+  function iconFor(code, day) {
+    if (code === 0 || code === 1) return day ? "sun" : "moon";
+    if (code === 2) return "partly";
+    if (code === 3) return "cloud";
+    if (code === 45 || code === 48) return "fog";
+    if (code >= 95) return "storm";
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+    return "rain";
+  }
+  function weather() {
+    var url = "https://api.open-meteo.com/v1/forecast?latitude=" + C.latitude + "&longitude=" + C.longitude +
+      "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=" + encodeURIComponent(tz);
+    fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      $("wx-icon").innerHTML = ICONS[iconFor(d.current.weather_code, d.current.is_day === 1)];
+      $("wx-temp").textContent = Math.round(d.current.temperature_2m) + "°";
+      $("wx-place").textContent = C.place || "";
+      $("wx-range").textContent = "H " + Math.round(d.daily.temperature_2m_max[0]) + "°  L " + Math.round(d.daily.temperature_2m_min[0]) + "°";
+      $("weather").classList.add("on");
+    }).catch(function () {});
+  }
+  if (C.showWeather !== false && C.latitude != null) { weather(); setInterval(weather, 30 * 60 * 1000); }
+
+  // Nudge everything a few pixels every 4 minutes so nothing sits in one place for hours.
+  var shifts = [[0, 0], [6, 4], [-5, 6], [4, -5], [-6, -3]], s = 0;
+  setInterval(function () { s = (s + 1) % shifts.length; $("safe").style.transform = "translate(" + shifts[s][0] + "px," + shifts[s][1] + "px)"; }, 4 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
