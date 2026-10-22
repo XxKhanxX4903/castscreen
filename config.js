@@ -52,7 +52,7 @@ window.CASTSCREEN = {
     { name: "YouTube",     colors: ["#ff3030", "#7a0a0a"] },
     { name: "BBC iPlayer", colors: ["#f54997", "#5b1b8f"] },
     { name: "Prime Video", colors: ["#1fa8ff", "#0a3d73"] },
-    { name: "Disney+",     colors: ["#2f6bff", "#0b1f5c"] },
-    { name: "Spotify",     colors: ["#1ed760", "#0b5a2a"] }
+    { name: "HBO Max",       colors: ["#6a3cff", "#1b0b5e"] },
+    { name: "YouTube Music", colors: ["#ff2d55", "#3d0012"] }
   ]
 };
